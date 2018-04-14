@@ -1,0 +1,21 @@
+---
+:structure:
+  - :name: first_name
+    :short_name: n
+    :values:
+      - bob
+      - alice
+      - mallory
+    :required: true
+  - :name: last_name
+    :short_name: l
+    :check: '^\w+$'
+    :required: true
+  - :name: quantity
+    :short_name: q
+    :type: int
+  - :name: file
+    :short_name: f
+  - :name: help
+    :short_name: h
+    :empty: true
