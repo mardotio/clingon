@@ -6,86 +6,88 @@ require 'clingon/checks/checks'
 require 'clingon/helpers/parser_configuration'
 require 'yaml'
 
-module Clingon
-  class << self
-    attr_accessor :conf, :store, :reserved
+class Clingon
+  attr_accessor :conf, :store, :reserved
+
+  def initialize
+    self.store = InputStore.new
+    self.conf = ParserConfiguration.new
   end
 
-  def self.configure
-    self.store ||= InputStore.new
-    self.conf ||= ParserConfiguration.new
-    yield(conf)
-    self.reserved = conf.structure.inject([]) do |all, current|
+  def configure
+    yield(self.conf)
+    self.reserved = self.conf.structure.inject([]) do |all, current|
       arr = ["#{conf.delimiter * 2}#{current[:name]}"]
       arr << "#{conf.delimiter}#{current[:short_name]}" if current[:short_name]
       all + arr
     end
   end
 
-  def self.fetch(value = nil)
+  def parse
+    strict_parse if self.conf.strict
+    required_values = get_required
+    parse_required(required_values)
+    optional_values = get_optional
+    parse_optional(optional_values)
+  end
+
+  def fetch(value = nil)
     if value
-      store.fetch(value)
+      self.store.fetch(value)
     else
-      store.inputs
+      self.store.inputs
     end
   end
 
-  def self.strict_parse
-    cli_inputs = conf.inputs.clone
+  private
+  def strict_parse
+    cli_inputs = self.conf.inputs.clone
     cli_inputs.each do |input|
-      if input =~ /^#{conf.delimiter}{1,2}/ && !Clingon.reserved?(input)
+      if input =~ /^#{self.conf.delimiter}{1,2}/ && !reserved?(input)
         raise(ReservedKeywordError.new(received: input, reserved: [/^-{1,2}/]))
       end
     end
   end
 
-  def self.parse
-    Clingon.strict_parse if conf.strict
-    required_values = Clingon.get_required
-    Clingon.parse_required(required_values)
-    optional_values = Clingon.get_optional
-    Clingon.parse_optional(optional_values)
-  end
-
-  def self.get_required_value(flag)
-    name = "#{conf.delimiter * 2}#{flag[:name]}"
-    short_name = "#{conf.delimiter}#{flag[:short_name]}" if flag[:short_name]
-    index = conf.inputs.index(short_name) if short_name
-    index ||= conf.inputs.index(name)
+  def get_required_value(flag)
+    name = "#{self.conf.delimiter * 2}#{flag[:name]}"
+    short_name = "#{self.conf.delimiter}#{flag[:short_name]}" if flag[:short_name]
+    index = self.conf.inputs.index(short_name) if short_name
+    index ||= self.conf.inputs.index(name)
     raise(MissingArgumentError.new(name: name, short_name: short_name)) unless index
-    conf.inputs[index + 1]
+    self.conf.inputs[index + 1]
   end
 
-  def self.get_optional_value(flag)
+  def get_optional_value(flag)
     empty = flag[:empty]
-    name = "#{conf.delimiter * 2}#{flag[:name]}"
-    short_name = "#{conf.delimiter}#{flag[:short_name]}" if flag[:short_name]
-    index = conf.inputs.index(short_name) if short_name
-    index ||= conf.inputs.index(name)
+    name = "#{self.conf.delimiter * 2}#{flag[:name]}"
+    short_name = "#{self.conf.delimiter}#{flag[:short_name]}" if flag[:short_name]
+    index = self.conf.inputs.index(short_name) if short_name
+    index ||= self.conf.inputs.index(name)
     if index && empty
       true
     elsif empty
       false
     elsif index
-      conf.inputs[index + 1]
+      self.conf.inputs[index + 1]
     else
       nil
     end
   end
 
-  def self.get_required
-    conf.structure.select { |flag| flag[:required] }
+  def get_required
+    self.conf.structure.select { |flag| flag[:required] }
   end
 
-  def self.get_optional
-    conf.structure.reject { |flag| flag[:required] }
+  def get_optional
+    self.conf.structure.reject { |flag| flag[:required] }
   end
 
-  def self.reserved?(value)
-    reserved.include?(value)
+  def reserved?(value)
+    self.reserved.include?(value)
   end
 
-  def self.convert_to_type(value, type)
+  def convert_to_type(value, type)
     value_to_convert = value.to_s
     case type
     when 'int'
@@ -105,47 +107,47 @@ module Clingon
     end
   end
 
-  def self.parse_required(required_structure)
+  def parse_required(required_structure)
     required_structure.each do |flag|
       check = flag[:check]
       type = flag[:type]
       allowed_values = flag[:values]
-      user_input = Clingon.get_required_value(flag)
-      if Clingon.reserved?(user_input)
+      user_input = get_required_value(flag)
+      if reserved?(user_input)
         raise(ReservedKeywordError.new(received: user_input, reserved: reserved))
       end
       if allowed_values
-        Clingon.check_allowed_value(user_input, allowed_values)
+        check_allowed_value(user_input, allowed_values)
       elsif type
-        Clingon.check_against_type(user_input, type)
+        check_against_type(user_input, type)
       elsif check
-        Clingon.check_against_regex(user_input, check)
+        check_against_regex(user_input, check)
       end
-      store.store(flag[:name], user_input)
+      self.store.store(flag[:name], user_input)
     end
   end
 
-  def self.parse_optional(optional_structure)
+  def parse_optional(optional_structure)
     optional_structure.each do |flag|
       check = flag[:check]
       type = flag[:type]
       allowed_values = flag[:values]
       empty = flag[:empty]
-      user_input = Clingon.get_optional_value(flag)
+      user_input = get_optional_value(flag)
       if user_input && !empty
-        if Clingon.reserved?(user_input)
+        if reserved?(user_input)
           raise(ReservedKeywordError.new(received: user_input, reserved: reserved))
         end
         if allowed_values
-          Clingon.check_allowed_value(user_input, allowed_values)
+          check_allowed_value(user_input, allowed_values)
         elsif type
-          Clingon.check_against_type(user_input, type)
-          user_input = Clingon.convert_to_type(user_input, type)
+          check_against_type(user_input, type)
+          user_input = convert_to_type(user_input, type)
         elsif check
-          Clingon.check_against_regex(user_input, check)
+          check_against_regex(user_input, check)
         end
       end
-      store.store(flag[:name], user_input)
+      self.store.store(flag[:name], user_input)
     end
   end
 end

@@ -1,4 +1,4 @@
-module Clingon
+class Clingon
   INT   = /^\d+$/
   FLOAT = /^\d*\.\d+$/
   NUM   = /^(\d+|\d*\.\d+)$/

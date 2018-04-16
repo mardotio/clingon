@@ -1,4 +1,4 @@
-module Clingon
+class Clingon
   class ParserConfiguration
     attr_accessor :inputs, :delimiter, :strict
     attr_reader :conf_file, :structure

@@ -1,4 +1,4 @@
-module Clingon
+class Clingon
   class ConfigurationFileError < StandardError
   end
 
